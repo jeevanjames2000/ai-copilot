@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Copilot</title>
+    <!-- Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <!-- Highlight.js Theme (GitHub Dark Dimmed for cleaner look) -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
+
+    <style>
+        :root {
+            /* Palette: Premium Dark Glass */
+            --bg-glass: rgba(18, 18, 20, 0.85);
+            /* Darker, less transparent for readability */
+            --bg-glass-solid: #121214;
+
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(255, 255, 255, 0.15);
+
+            --primary: #3b82f6;
+            /* Blue 500 */
+            --primary-hover: #2563eb;
+
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+
+            --radius-app: 12px;
+            --radius-elem: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background: transparent;
+            color: var(--text-main);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        /* Main Application Window */
+        .app-shell {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-glass);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-app);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+            transition: border-color 0.2s;
+        }
+
+        .app-shell:hover {
+            border-color: var(--border-highlight);
+        }
+
+        /* --- Header --- */
+        header {
+            height: 48px;
+            padding: 0 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border-subtle);
+            -webkit-app-region: drag;
+            /* Draggable */
+        }
+
+        .header-title {
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--primary);
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+            -webkit-app-region: no-drag;
+        }
+
+        .ctrl-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .ctrl-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+        }
+
+        .ctrl-btn.close:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        /* --- Main Content --- */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Chat/Output Area */
+        .output-scroller {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+
+        .welcome-msg {
+            text-align: center;
+            margin-top: 40px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .model-response {
+            font-size: 14px;
+            line-height: 1.6;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Typography Implementation */
+        h1,
+        h2,
+        h3 {
+            margin: 16px 0 8px;
+            color: var(--text-main);
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        p,
+        li {
+            color: #cbd5e1;
+        }
+
+        strong {
+            color: white;
+        }
+
+        /* Code Blocks - The Star */
+        pre {
+            position: relative;
+            background: #0d1117 !important;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-elem);
+            margin: 12px 0;
+            overflow: hidden;
+            /* For cleaner corners */
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 13px;
+            display: block;
+            padding: 16px;
+            overflow-x: auto;
+        }
+
+        /* Copy Button */
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        pre:hover .copy-btn {
+            opacity: 1;
+        }
+
+        .copy-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .copy-btn.copied {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+
+        /* --- Footer / Input --- */
+        .input-area {
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-elem);
+            transition: border-color 0.2s;
+        }
+
+        .input-wrapper:focus-within {
+            border-color: var(--primary);
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            padding: 12px;
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            resize: none;
+            height: 56px;
+            /* Initial height */
+            outline: none;
+            display: block;
+        }
+
+        .action-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.6;
+        }
+
+        .send-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .send-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-shell">
+        <header>
+            <div class="header-title">
+                <div class="status-indicator"></div>
+                AI Copilot
+            </div>
+            <div class="window-controls">
+                <button class="ctrl-btn" onclick="toggleSettings()" title="Settings">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                </button>
+                <button class="ctrl-btn" onclick="window.minimize()" title="Hide (Esc)">
+                    <svg width="12" height="2" viewBox="0 0 12 2" fill="currentColor">
+                        <rect width="12" height="2" rx="1" />
+                    </svg>
+                </button>
+                <button class="ctrl-btn close" onclick="window.closeApp()" title="Close">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                        <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <div class="output-scroller" id="outputContainer">
+                <!-- Welcome Message (Default) -->
+                <div class="welcome-msg" id="welcomeMsg">
+                    <p>Ready to code. Just ask.</p>
+                </div>
+
+                <!-- Content will be injected here -->
+                <div id="aiResponse" class="model-response" style="display: none;"></div>
+            </div>
+
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea id="promptInput" placeholder="Describe the function or bug..."
+                        spellcheck="false"></textarea>
+                </div>
+                <div class="action-row">
+                    <span class="hint">Shift + Enter for new line • Enter to send</span>
+                    <button class="send-btn" id="runBtn" onclick="runAnalysis()">
+                        Generate
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Settings</h3>
+                <button class="ctrl-btn close" onclick="toggleSettings()">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                        <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <label for="apiKeyInput">Gemini API Key</label>
+                <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key..." />
+                <p class="hint" style="margin-top: 8px;">
+                    Get your free API key from
+                    <a href="https://aistudio.google.com/app/apikey" style="color: var(--primary);">Google AI Studio</a>
+                </p>
+                <div id="apiKeyStatus" style="margin-top: 12px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="send-btn" onclick="saveApiKey()">Save API Key</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: var(--bg-glass-solid);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-app);
+            width: 90%;
+            max-width: 400px;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .modal-body {
+            padding: 16px;
+        }
+
+        .modal-body label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .modal-body input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-elem);
+            color: var(--text-main);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .modal-body input:focus {
+            border-color: var(--primary);
+        }
+
+        .modal-footer {
+            padding: 16px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .setup-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .setup-screen h2 {
+            margin-bottom: 8px;
+        }
+
+        .setup-screen p {
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+    </style>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        let showdown, hljs, converter;
+
+        try {
+            showdown = require('showdown');
+            hljs = require('highlight.js');
+
+            // Configure Markdown
+            converter = new showdown.Converter({
+                simpleLineBreaks: true,
+                openLinksInNewWindow: true
+            });
+        } catch (err) {
+            console.error(err);
+            alert("Failed to load dependencies: " + err.message);
+        }
+
+        // DOM Elements
+        const ui = {
+            input: document.getElementById('promptInput'),
+            btn: document.getElementById('runBtn'),
+            output: document.getElementById('aiResponse'),
+            welcome: document.getElementById('welcomeMsg'),
+            scroller: document.getElementById('outputContainer')
+        };
+
+        // Window Actions
+        window.closeApp = () => ipcRenderer.send('quit-app');
+        window.minimize = () => ipcRenderer.send('close-app');
+
+        // Main Function
+        async function runAnalysis() {
+            const text = ui.input.value.trim();
+            if (!text) return;
+
+            // 1. Prepare UI
+            ui.btn.innerText = 'Thinking...';
+            ui.btn.disabled = true;
+            ui.welcome.style.display = 'none';
+            ui.output.style.display = 'block';
+            ui.output.innerHTML = '<div style="color:var(--text-muted)">Running analysis...</div>';
+
+            // 2. Invoke AI
+            try {
+                const result = await ipcRenderer.invoke('analyze-text', text);
+
+                if (result.type === 'error') {
+                    renderError(result.response);
+                } else {
+                    renderContent(result.response);
+                }
+            } catch (e) {
+                renderError(e.message);
+            }
+
+            // 3. Reset UI
+            ui.btn.innerText = 'Generate';
+            ui.btn.disabled = false;
+            ui.input.value = ''; // Clear input or keep it? Checking user pref. Usually clear.
+            ui.input.focus();
+        }
+
+        function renderContent(markdownText) {
+            // Convert to HTML
+            const html = converter.makeHtml(markdownText);
+            ui.output.innerHTML = html;
+
+            // Syntax Highlight
+            ui.output.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+
+            // Add Copy Buttons
+            addCopyButtons();
+
+            // Scroll to top of result
+            ui.scroller.scrollTop = 0;
+        }
+
+        function renderError(msg) {
+            ui.output.innerHTML = `<div style="color: #ef4444; border-left: 2px solid #ef4444; padding-left: 10px;">${msg}</div>`;
+        }
+
+        function addCopyButtons() {
+            const preBlocks = ui.output.querySelectorAll('pre');
+            preBlocks.forEach(pre => {
+                // Create Button
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.innerText = 'Copy';
+
+                // Click Handler
+                btn.addEventListener('click', async () => {
+                    const code = pre.querySelector('code').innerText;
+                    try {
+                        await navigator.clipboard.writeText(code);
+                        // Feedback
+                        btn.innerText = 'Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerText = 'Copy';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        btn.innerText = 'Error';
+                    }
+                });
+
+                pre.appendChild(btn);
+            });
+        }
+
+        // Input Handling
+        ui.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                runAnalysis();
+            }
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('settingsModal');
+                if (modal.style.display !== 'none') {
+                    toggleSettings();
+                } else {
+                    window.minimize();
+                }
+            }
+        });
+
+        // Settings Modal Functions
+        function toggleSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        async function saveApiKey() {
+            const input = document.getElementById('apiKeyInput');
+            const status = document.getElementById('apiKeyStatus');
+            const apiKey = input.value.trim();
+
+            if (!apiKey) {
+                status.innerHTML = '<span style="color: #ef4444;">Please enter an API key</span>';
+                return;
+            }
+
+            status.innerHTML = '<span style="color: var(--text-muted);">Validating key...</span>';
+
+            const result = await ipcRenderer.invoke('save-api-key', apiKey);
+
+            if (result.success) {
+                status.innerHTML = '<span style="color: #10b981;">✓ API key saved successfully!</span>';
+                // Update status indicator
+                document.querySelector('.status-indicator').style.background = '#10b981';
+                document.querySelector('.status-indicator').style.boxShadow = '0 0 12px #10b981';
+                setTimeout(() => {
+                    toggleSettings();
+                    status.innerHTML = '';
+                }, 1500);
+            } else {
+                status.innerHTML = `<span style="color: #ef4444;">✗ ${result.error}</span>`;
+            }
+        }
+
+        // Check if API key is configured on startup
+        async function checkApiKeyOnStartup() {
+            const hasKey = await ipcRenderer.invoke('check-api-key');
+            const indicator = document.querySelector('.status-indicator');
+
+            if (hasKey) {
+                indicator.style.background = '#10b981';
+                indicator.style.boxShadow = '0 0 12px #10b981';
+            } else {
+                indicator.style.background = '#f59e0b';
+                indicator.style.boxShadow = '0 0 12px #f59e0b';
+                // Show setup message
+                ui.welcome.innerHTML = `
+                    <p style="font-size: 24px; margin-bottom: 8px;">🔑</p>
+                    <p>API Key Required</p>
+                    <p style="font-size: 12px; margin-top: 8px;">Click the ⚙️ icon to add your Gemini API key</p>
+                `;
+            }
+        }
+
+        checkApiKeyOnStartup();
+
+        // Auto-focus
+        ui.input.focus();
+
+    </script>
+</body>
+
+</html>
