@@ -7,13 +7,10 @@ let mainWindow;
 let genAI;
 let model;
 
-// Get the path for storing the API key (in user's app data)
 function getConfigPath() {
   const userDataPath = app.getPath('userData');
   return path.join(userDataPath, 'config.json');
 }
-
-// Load API key from config file
 function loadApiKey() {
   try {
     const configPath = getConfigPath();
@@ -27,7 +24,6 @@ function loadApiKey() {
   return null;
 }
 
-// Save API key to config file
 function saveApiKey(apiKey) {
   try {
     const configPath = getConfigPath();
@@ -39,11 +35,28 @@ function saveApiKey(apiKey) {
   }
 }
 
-// Initialize the AI model
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b"
+];
+let currentModelIndex = 0;
+
 function initializeAI(apiKey) {
   if (apiKey) {
     genAI = new GoogleGenerativeAI(apiKey);
-    model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    model = genAI.getGenerativeModel({ model: MODELS[currentModelIndex] });
+    return true;
+  }
+  return false;
+}
+
+function switchToNextModel() {
+  if (currentModelIndex < MODELS.length - 1) {
+    currentModelIndex++;
+    model = genAI.getGenerativeModel({ model: MODELS[currentModelIndex] });
+    console.log(`Switched to model: ${MODELS[currentModelIndex]}`);
     return true;
   }
   return false;
@@ -72,14 +85,12 @@ function createWindow() {
 
   mainWindow.loadFile('index.html');
 
-  // WINDOWS STEALTH MODE: Hides window from screen capture, screenshots, and screen sharing
   mainWindow.setContentProtection(true);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
-  // Toggle Visibility: Ctrl+Shift+A
   globalShortcut.register('CommandOrControl+Shift+A', () => {
     if (mainWindow.isVisible()) {
       mainWindow.hide();
@@ -108,55 +119,69 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Check if API key is configured
 ipcMain.handle('check-api-key', () => {
   return !!model;
 });
-
-// Save API key from settings
 ipcMain.handle('save-api-key', async (event, apiKey) => {
   if (!apiKey || apiKey.trim() === '') {
     return { success: false, error: 'API key cannot be empty' };
   }
 
-  // Try to initialize with the new key
+  if (!apiKey.startsWith('AI') || apiKey.length < 30) {
+    return { success: false, error: 'Invalid API key format. Keys should start with "AI" and be at least 30 characters.' };
+  }
   try {
-    const testAI = new GoogleGenerativeAI(apiKey);
-    const testModel = testAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-    // Quick validation - try to generate something simple
-    await testModel.generateContent('Say "OK"');
-
-    // Save and initialize
     saveApiKey(apiKey);
     initializeAI(apiKey);
-
     return { success: true };
   } catch (err) {
-    return { success: false, error: 'Invalid API key: ' + err.message };
+    return { success: false, error: 'Failed to save API key: ' + err.message };
   }
 });
 
-// Handle text analysis
 ipcMain.handle('analyze-text', async (event, text) => {
   if (!model) {
     return { type: 'error', response: 'API Key not configured. Click the settings icon to add your key.' };
   }
 
-  try {
-    const prompt = `
-      You are a helpful and intelligent AI assistant powered by Google Gemini.
-      Your goal is to provide accurate, concise, and well-structured responses to the user's queries.
+  const prompt = `
+    You are a helpful and intelligent AI assistant powered by Google Gemini.
+    Your goal is to provide accurate, concise, and well-structured responses to the user's queries.
 
-      User Query: ${text}
-    `;
+    User Query: ${text}
+  `;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return { type: 'success', response: response.text() };
-  } catch (err) {
-    return { type: 'error', response: 'AI Error: ' + err.message };
+  let attempts = 0;
+  const maxAttempts = MODELS.length;
+
+  while (attempts < maxAttempts) {
+    try {
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return { type: 'success', response: response.text(), model: MODELS[currentModelIndex] };
+    } catch (err) {
+      const errorMessage = err.message || '';
+
+      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate')) {
+        console.log(`Rate limit hit on ${MODELS[currentModelIndex]}, trying next model...`);
+
+        if (switchToNextModel()) {
+          attempts++;
+          continue;
+        } else {
+          return {
+            type: 'error',
+            response: `All models rate limited. Please wait a few minutes and try again.\n\nModels tried: ${MODELS.slice(0, currentModelIndex + 1).join(', ')}`
+          };
+        }
+      }
+
+      // Other errors
+      return { type: 'error', response: 'AI Error: ' + err.message };
+    }
   }
+
+  return { type: 'error', response: 'Failed after trying all available models.' };
 });
 
 ipcMain.on('close-app', () => mainWindow.hide());
