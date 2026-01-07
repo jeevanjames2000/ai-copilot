@@ -1,710 +1,853 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Copilot</title>
-    <!-- Fonts -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-        rel="stylesheet">
-    <!-- Highlight.js Theme (GitHub Dark Dimmed for cleaner look) -->
-    <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
 
     <style>
         :root {
-            /* Palette: Premium Dark Glass */
-            --bg-glass: rgba(18, 18, 20, 0.85);
-            /* Darker, less transparent for readability */
-            --bg-glass-solid: #121214;
-
-            --border-subtle: rgba(255, 255, 255, 0.08);
-            --border-highlight: rgba(255, 255, 255, 0.15);
-
-            --primary: #3b82f6;
-            /* Blue 500 */
-            --primary-hover: #2563eb;
-
-            --text-main: #f8fafc;
+            /* Stealth & Translucency */
+            --bg-glass: rgba(0, 0, 0, 0.35); /* More transparent */
+            --bg-panel: rgba(255, 255, 255, 0.05);
+            --border-subtle: rgba(255, 255, 255, 0.04);
+            
+            /* Text - Softer than pure white */
+            --text-main: #e2e8f0; 
             --text-muted: #94a3b8;
-
-            --radius-app: 12px;
-            --radius-elem: 8px;
+            
+            /* UI Roundedness */
+            --radius-app: 24px; /* Very soft edges */
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         body {
             margin: 0;
-            padding: 0;
-            font-family: 'Inter', sans-serif;
-            background: transparent;
+            padding: 12px; /* Margin for the rounded look within window */
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            background: transparent; /* Main window handled by glass container */
             color: var(--text-main);
             height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-        }
-
-        /* Main Application Window */
-        .app-shell {
-            width: 100%;
-            height: 100%;
-            background: var(--bg-glass);
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-app);
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-            transition: border-color 0.2s;
+            -webkit-font-smoothing: antialiased;
         }
-
-        .app-shell:hover {
-            border-color: var(--border-highlight);
-        }
-
-        /* --- Header --- */
-        header {
-            height: 48px;
-            padding: 0 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.03);
-            border-bottom: 1px solid var(--border-subtle);
-            -webkit-app-region: drag;
-            /* Draggable */
-        }
-
-        .header-title {
-            font-weight: 500;
-            font-size: 14px;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            pointer-events: none;
-        }
-
-        .status-indicator {
-            width: 8px;
-            height: 8px;
-            background: var(--primary);
-            border-radius: 50%;
-            box-shadow: 0 0 12px var(--primary);
-        }
-
-        .window-controls {
-            display: flex;
-            gap: 8px;
-            -webkit-app-region: no-drag;
-        }
-
-        .ctrl-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .ctrl-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-main);
-        }
-
-        .ctrl-btn.close:hover {
-            background: #ef4444;
-            color: white;
-        }
-
-        /* --- Main Content --- */
-        main {
+        
+        /* The Glass Container */
+        .glass-container {
             flex: 1;
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px) saturate(140%); /* Effect for content behind */
+            border-radius: var(--radius-app);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
             display: flex;
             flex-direction: column;
             overflow: hidden;
             position: relative;
         }
 
-        /* Chat/Output Area */
-        .output-scroller {
+        /* Title Bar */
+        .title-bar {
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 12px;
+            -webkit-app-region: drag;
+            margin-top: 4px; /* Space from top rounded edge */
+        }
+        .window-controls button {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.3);
+            cursor: pointer;
+            padding: 4px 8px;
+            -webkit-app-region: no-drag;
+            transition: color 0.2s;
+            border-radius: 4px;
+        }
+        .window-controls button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        /* Main Content */
+        #outputContainer {
             flex: 1;
             overflow-y: auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+            padding: 10px 20px;
             scroll-behavior: smooth;
+            border-top: 1px solid transparent; /* Cleaner look */
         }
+        
+        #outputContainer::-webkit-scrollbar { width: 4px; }
+        #outputContainer::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 
-        .welcome-msg {
-            text-align: center;
-            margin-top: 40px;
-            color: var(--text-muted);
+        .welcome-box { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; opacity: 0.4; }
+
+        /* CODE BLOCKS - The Priority */
+        .model-response pre { 
+            background: rgba(0, 0, 0, 0.5); 
+            padding: 12px;
+            border-radius: 12px; 
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin: 12px 0; 
             font-size: 13px;
+            line-height: 1.3; /* Tighter spacing for density */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
+        
+        /* VIVID SYNTAX COLORS (Neon / Translucent Friendly) */
+        .hljs-keyword, .hljs-operator { color: #ff79c6; font-weight: bold; } /* Pink/Magenta */
+        .hljs-function, .hljs-title { color: #8be9fd; font-weight: bold; } /* Cyan */
+        .hljs-variable, .hljs-attr { color: #f8f8f2; } /* White-ish */
+        .hljs-string { color: #f1fa8c; } /* Yellow */
+        .hljs-comment { color: #6272a4; font-style: italic; } /* Muted Purple */
+        .hljs-number, .hljs-literal { color: #bd93f9; } /* Purple */
+        .hljs-class, .hljs-type { color: #50fa7b; } /* Green */
+        .hljs-built_in { color: #ffb86c; } /* Orange */
 
-        .model-response {
-            font-size: 14px;
-            line-height: 1.6;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(5px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Typography Implementation */
-        h1,
-        h2,
-        h3 {
-            margin: 16px 0 8px;
-            color: var(--text-main);
-            font-weight: 600;
-            font-size: 1.1em;
-        }
-
-        p,
-        li {
-            color: #cbd5e1;
-        }
-
-        strong {
-            color: white;
-        }
-
-        /* Code Blocks - The Star */
-        pre {
-            position: relative;
-            background: #0d1117 !important;
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-elem);
-            margin: 12px 0;
-            overflow: hidden;
-            /* For cleaner corners */
-        }
-
-        code {
-            font-family: 'JetBrains Mono', monospace !important;
-            font-size: 13px;
-            display: block;
-            padding: 16px;
-            overflow-x: auto;
-        }
-
-        /* Copy Button */
         .copy-btn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
+            top: 10px; right: 10px;
             background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            color: var(--text-muted);
-            font-size: 11px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            opacity: 0;
-            transition: all 0.2s;
-            font-family: 'Inter', sans-serif;
+            color: #bd93f9;
+            opacity: 0.8;
         }
+        .model-response pre:hover .copy-btn { opacity: 1; background: rgba(255, 255, 255, 0.2); }
 
-        pre:hover .copy-btn {
-            opacity: 1;
-        }
-
-        .copy-btn:hover {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
-
-        .copy-btn.copied {
-            background: #10b981;
-            color: white;
-            border-color: #10b981;
-        }
-
-        /* --- Footer / Input --- */
+        /* Input Area - Minimalist */
         .input-area {
             padding: 16px;
-            background: rgba(0, 0, 0, 0.2);
-            border-top: 1px solid var(--border-subtle);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            background: transparent;
+            /* border-top: 1px solid var(--border-subtle); */ /* Removed for cleaner translucent look */
         }
+        
+        .badges-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .badge {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: none; /* Hidden by default */
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+        .badge:hover { background: rgba(59, 130, 246, 0.3); }
 
         .input-wrapper {
-            position: relative;
-            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            gap: 8px;
+            background: var(--bg-panel);
+            padding: 4px;
+            border-radius: 8px;
             border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-elem);
-            transition: border-color 0.2s;
+            align-items: flex-end;
         }
-
-        .input-wrapper:focus-within {
-            border-color: var(--primary);
-            background: rgba(0, 0, 0, 0.5);
-        }
-
+        
         textarea {
-            width: 100%;
+            flex: 1;
             background: transparent;
             border: none;
-            padding: 12px;
             color: var(--text-main);
-            font-family: 'Inter', sans-serif;
+            font-family: inherit;
             font-size: 14px;
             resize: none;
-            height: 56px;
-            /* Initial height */
+            padding: 8px;
+            min-height: 40px;
+            max-height: 120px;
             outline: none;
-            display: block;
         }
-
-        .action-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .hint {
-            font-size: 11px;
+        
+        /* Action Buttons */
+        .action-btn {
+            background: transparent;
+            border: none;
             color: var(--text-muted);
-            opacity: 0.6;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-
+        .action-btn:hover { background: rgba(255,255,255,0.05); color: var(--text-main); }
+        .action-btn.active { color: var(--danger); animation: pulse 1.5s infinite; }
+        .action-btn.recording { color: var(--danger); }
+        
         .send-btn {
             background: var(--primary);
             color: white;
-            border: none;
             padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 13px;
             font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s;
-            display: flex;
+        }
+        .send-btn:hover { background: var(--primary-hover); }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: none;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .modal {
+            background: #1e1e20;
+            padding: 24px;
+            border-radius: 12px;
+            width: 80%;
+            border: 1px solid var(--border-subtle);
+        }
+        .modal input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-subtle);
+            color: #fff;
+            border-radius: 6px;
+            margin-top: 8px;
+            margin-bottom: 16px;
         }
 
-        .send-btn:hover {
-            background: var(--primary-hover);
+        .status-indicator {
+            width: 8px; height: 8px;
+            background: #64748b;
+            border-radius: 50%;
+            position: absolute;
+            top: 12px; left: 12px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
         }
 
-        .send-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Scrollbar Styling */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
-
 <body>
 
-    <div class="app-shell">
-        <header>
-            <div class="header-title">
-                <div class="status-indicator"></div>
-                AI Copilot
-            </div>
-            <div class="window-controls">
-                <button class="ctrl-btn" onclick="toggleSettings()" title="Settings">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path
-                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                        </path>
-                    </svg>
-                </button>
-                <button class="ctrl-btn" onclick="window.minimize()" title="Hide (Esc)">
-                    <svg width="12" height="2" viewBox="0 0 12 2" fill="currentColor">
-                        <rect width="12" height="2" rx="1" />
-                    </svg>
-                </button>
-                <button class="ctrl-btn close" onclick="window.closeApp()" title="Close">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                        <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                    </svg>
-                </button>
-            </div>
-        </header>
+    <!-- Launch Screen -->
+    <div id="launchScreen" style="
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.4); backdrop-filter: blur(15px);
+        z-index: 999; display: flex; align-items: center; justify-content: center;
+        flex-direction: column; 
+        border-radius: var(--radius-app);
+    ">
+        <div style="
+            background: rgba(255,255,255,0.03); 
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 40px; 
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            width: 300px;
+        ">
+            <h1 style="margin: 0 0 10px 0; font-weight: 500; font-size: 24px; letter-spacing: -0.5px;">AI Pilot</h1>
+            <p style="margin: 0 0 30px 0; color: var(--text-muted); font-size: 13px;">Stealth Coding Assistant</p>
+            
+            <button onclick="launchPilot()" style="
+                background: linear-gradient(135deg, #3b82f6, #6366f1);
+                border: none; color: white;
+                padding: 12px 0; width: 100%; font-size: 15px; font-weight: 500;
+                border-radius: 10px; cursor: pointer;
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+                transition: transform 0.2s, box-shadow 0.2s;
+            " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(99, 102, 241, 0.5)'" 
+              onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(99, 102, 241, 0.4)'">
+                Launch Pilot
+            </button>
 
-        <main>
-            <div class="output-scroller" id="outputContainer">
-                <!-- Welcome Message (Default) -->
-                <div class="welcome-msg" id="welcomeMsg">
-                    <p>Ready to code. Just ask.</p>
-                </div>
-
-                <!-- Content will be injected here -->
-                <div id="aiResponse" class="model-response" style="display: none;"></div>
-            </div>
-
-            <div class="input-area">
-                <div class="input-wrapper">
-                    <textarea id="promptInput" placeholder="Describe the function or bug..."
-                        spellcheck="false"></textarea>
-                </div>
-                <div class="action-row">
-                    <span class="hint">Shift + Enter for new line • Enter to send</span>
-                    <button class="send-btn" id="runBtn" onclick="runAnalysis()">
-                        Generate
-                    </button>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <!-- Settings Modal -->
-    <div id="settingsModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>⚙️ Settings</h3>
-                <button class="ctrl-btn close" onclick="toggleSettings()">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                        <path d="M9 1L1 9M1 1L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                    </svg>
+            <div style="margin-top: 20px;">
+                <button onclick="toggleSettings()" style="
+                    background: transparent; border: none; 
+                    color: var(--text-muted); font-size: 12px; 
+                    cursor: pointer; text-decoration: none; opacity: 0.7;
+                    display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+                ">
+                    <span>⚙</span> Configure Keys
                 </button>
-            </div>
-            <div class="modal-body">
-                <label for="apiKeyInput">Gemini API Key</label>
-                <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API key..." />
-                <p class="hint" style="margin-top: 8px;">
-                    Get your free API key from
-                    <a href="https://aistudio.google.com/app/apikey" style="color: var(--primary);">Google AI Studio</a>
-                </p>
-                <div id="apiKeyStatus" style="margin-top: 12px;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="send-btn" onclick="saveApiKey()">Save API Key</button>
             </div>
         </div>
     </div>
 
-    <style>
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            backdrop-filter: blur(4px);
-        }
-
-        .modal-content {
-            background: var(--bg-glass-solid);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-app);
-            width: 90%;
-            max-width: 400px;
-            padding: 0;
-            overflow: hidden;
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-
-        .modal-header h3 {
-            margin: 0;
-            font-size: 16px;
-        }
-
-        .modal-body {
-            padding: 16px;
-        }
-
-        .modal-body label {
-            display: block;
-            font-size: 13px;
+<div class="glass-container">
+    <!-- Title Bar -->
+    <div class="title-bar">
+         <!-- Status Indicator -->
+         <div class="status-indicator" style="width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; margin-left: 10px;" title="API Key Status"></div>
+         
+         <!-- Model Selector -->
+         <select id="modelSelector" onchange="changeModel(this.value)" style="
+            background: transparent;
+            border: none;
             color: var(--text-muted);
-            margin-bottom: 8px;
-        }
-
-        .modal-body input {
-            width: 100%;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-elem);
-            color: var(--text-main);
-            font-size: 14px;
+            font-family: inherit;
+            font-size: 11px;
+            margin-left: 10px;
+            margin-right: auto;
+            cursor: pointer;
             outline: none;
-        }
+            appearance: none; /* Remove default arrow */
+            -webkit-app-region: no-drag;
+         " title="Select Model Priority">
+             <option value="gemini">Gemini Auto</option>
+             <option value="groq">Groq (Free/Fast)</option>
+             <option value="claude">Claude 3.5</option>
+             <option value="deepseek">DeepSeek</option>
+             <option value="openrouter">OpenRouter</option>
+         </select>
 
-        .modal-body input:focus {
-            border-color: var(--primary);
-        }
+         <div class="window-controls">
+            <!-- Settings Icon -->
+            <button onclick="toggleSettings()" title="Settings">⚙</button>
+            <button onclick="window.minimize()" title="Hide">─</button>
+            <button onclick="window.closeApp()" title="Close">✕</button>
+        </div>
+    </div>
 
-        .modal-footer {
-            padding: 16px;
-            border-top: 1px solid var(--border-subtle);
-            display: flex;
-            justify-content: flex-end;
-        }
+    <!-- Main Output -->
+    <div id="outputContainer">
+        <div id="welcomeMsg" class="welcome-box">
+             <!-- Text removed for stealth -->
+        </div>
+        <div id="aiResponse" style="display: none;"></div>
+    </div>
 
-        .setup-screen {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 40px 20px;
-        }
+    <!-- Input Area -->
+    <div class="input-area">
+        <div class="badges-container">
+            <div id="screenshotBadge" class="badge" onclick="clearScreenshot()">
+                <span>📸 Attached</span> <span>✕</span>
+            </div>
+            <div id="audioBadge" class="badge" onclick="clearAudio()">
+                <span>🎤 Recorded</span> <span>✕</span>
+            </div>
+        </div>
+        
+        <div class="input-wrapper">
+            <!-- Buttons kept, alerts suppressed -->
+            <button id="liveModeBtn" class="action-btn" onclick="toggleLiveMode()" title="Live">
+                <span>🔴</span>
+            </button>
+            <button class="action-btn" onclick="triggerSilentScreenCapture()" title="Snap">
+                <span>📸</span>
+            </button>
+            <button id="micBtn" class="action-btn" onclick="toggleRecording()" title="Mic">
+                <span>🎤</span>
+            </button>
+            
+            <textarea id="promptInput" rows="1" placeholder="..."></textarea>
+            
+            <button id="runBtn" class="action-btn send-btn" onclick="runAnalysis()">
+                &rarr;
+            </button>
+        </div>
+    </div>
+</div>
 
-        .setup-screen h2 {
-            margin-bottom: 8px;
-        }
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal">
+            <h3 style="margin-top: 0;">API Settings</h3>
+            
+            <label style="font-size: 11px; color: var(--text-muted);">Gemini API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="AIza..." style="margin-bottom: 8px;">
 
-        .setup-screen p {
-            color: var(--text-muted);
-            margin-bottom: 20px;
-        }
-    </style>
+            <label style="font-size: 11px; color: var(--text-muted);">Groq API Key (Free Llama 3)</label>
+            <input type="password" id="groqKeyInput" placeholder="gsk_..." style="margin-bottom: 8px;">
+            <div style="font-size: 10px; color: #64748b; margin-bottom: 8px;">Get free key at: <a href="#" onclick="require('electron').shell.openExternal('https://console.groq.com/keys')" style="color:#64748b">console.groq.com</a></div>
 
+            <label style="font-size: 11px; color: var(--text-muted);">Claude API Key</label>
+            <input type="password" id="claudeKeyInput" placeholder="sk-ant..." style="margin-bottom: 8px;">
+
+            <label style="font-size: 11px; color: var(--text-muted);">DeepSeek API Key (Optional)</label>
+            <input type="password" id="deepseekKeyInput" placeholder="sk-..." style="margin-bottom: 8px;">
+
+            <label style="font-size: 11px; color: var(--text-muted);">OpenRouter API Key (Optional)</label>
+            <input type="password" id="openrouterKeyInput" placeholder="sk-or-..." style="margin-bottom: 8px;">
+
+            <label style="font-size: 11px; color: var(--text-muted);">OpenRouter Model ID</label>
+            <input type="text" id="openrouterModelInput" placeholder="google/gemini-2.0-flash-exp:free" style="margin-bottom: 12px; font-family: monospace; font-size: 11px;">
+
+            <div id="apiKeyStatus" style="font-size: 12px; margin-bottom: 12px; height: 16px;"></div>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="action-btn" onclick="toggleSettings()">Cancel</button>
+                <button class="action-btn send-btn" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
     <script>
         const { ipcRenderer } = require('electron');
-        let showdown, hljs, converter;
+        let showdown, hljs;
+        try { showdown = require('showdown'); hljs = require('highlight.js'); } catch(e){}
 
-        try {
-            showdown = require('showdown');
-            hljs = require('highlight.js');
+        // OVERRIDE ALERT FOR SILENCE
+        window.alert = (msg) => { console.log("Suppressed Alert:", msg); };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
-            // Configure Markdown
-            converter = new showdown.Converter({
-                simpleLineBreaks: true,
-                openLinksInNewWindow: true
-            });
-        } catch (err) {
-            console.error(err);
-            alert("Failed to load dependencies: " + err.message);
-        }
-
-        // DOM Elements
+    <script>
+        const converter = new showdown.Converter({ simpleLineBreaks: true, openLinksInNewWindow: true });
+        
         const ui = {
             input: document.getElementById('promptInput'),
             btn: document.getElementById('runBtn'),
+            micBtn: document.getElementById('micBtn'),
             output: document.getElementById('aiResponse'),
             welcome: document.getElementById('welcomeMsg'),
-            scroller: document.getElementById('outputContainer')
+            scroller: document.getElementById('outputContainer'),
+            ssBadge: document.getElementById('screenshotBadge'),
+            audioBadge: document.getElementById('audioBadge')
         };
 
-        // Window Actions
+        // Window Controls
         window.closeApp = () => ipcRenderer.send('quit-app');
-        window.minimize = () => ipcRenderer.send('close-app');
+        window.minimize = () => ipcRenderer.send('close-app'); // Hide mapped to simple close/hide
 
-        // Main Function
+        // State
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlobBase64 = null;
+        let liveModeInterval;
+        let liveStream;
+        let liveModeActive = false;
+        let isPilotActive = false; // New Launcher State
+
+        window.launchPilot = () => {
+            const launcher = document.getElementById('launchScreen');
+            launcher.style.transition = 'opacity 0.3s ease';
+            launcher.style.opacity = '0';
+            setTimeout(() => {
+                launcher.style.display = 'none';
+                isPilotActive = true;
+            }, 300);
+        };
+        
+        // Settings override to ensure checks work even before launch
+        // The modal is z-index 100 which might be same/lower than launchScreen (z999). 
+        // We'll fix settings z-index in next step or CSS. 
+        // Wait, Settings Modal CSS says z-index: 100. Launch Screen is z-index: 999.
+        // We need to raise Settings Modal z-index dynamically or in CSS.
+        
+        // --- Screenshot Logic ---
+        ipcRenderer.on('screenshot-captured', () => {
+            // This event comes from the global shortcut
+            ui.ssBadge.style.display = 'flex';
+            ui.input.focus();
+        });
+        
+        window.clearScreenshot = () => { 
+            window.manualScreenshotData = null; 
+            ui.ssBadge.style.display = 'none'; 
+            // Also tell main process to clear its pending, if any
+            ipcRenderer.invoke('clear-pending-screenshot'); // Need to implement this in main or just ignore
+        };
+
+        async function triggerSilentScreenCapture() {
+            // Manual trigger via button
+            const btn = document.querySelector('button[title="Snap"]');
+            
+            try {
+                // First, hide window slightly to grab what's behind
+                // Actually the main process 'capture-screen' handles minimal hiding, or we do it here?
+                // The global shortcut logic does 'hide' -> 'capture' -> 'show'.
+                // 'capture-screen' handler in main.js (checked previously) just grabs sources.
+                
+                // Let's implement a robust flow:
+                document.body.style.opacity = '0'; // Hide UI content momentarily
+                setTimeout(async () => {
+                    try {
+                        const result = await ipcRenderer.invoke('capture-screen');
+                        document.body.style.opacity = '1'; // Restore
+                        
+                        if (result.success) {
+                            window.manualScreenshotData = result.data; // Store for sending
+                            ui.ssBadge.style.display = 'flex';
+                        } else {
+                            renderError("Screen capture failed: " + result.error);
+                        }
+                    } catch(e) { 
+                        document.body.style.opacity = '1';
+                        renderError("Capture Error: " + e.message); 
+                    }
+                }, 100); // 100ms delay for opacity transition
+            } catch(e) { console.error(e); }
+        }
+
+        // --- Audio Logic ---
+        window.clearAudio = () => { audioBlobBase64 = null; ui.audioBadge.style.display = 'none'; };
+        
+        async function toggleRecording() {
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                try {
+                    // Check permissions / device
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        if(audioChunks.length === 0) {
+                            console.warn("No audio chunks recorded");
+                            return;
+                        }
+                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const reader = new FileReader();
+                        reader.readAsDataURL(blob);
+                        reader.onloadend = () => {
+                            // result is data:audio/webm;base64,....
+                            audioBlobBase64 = reader.result.split(',')[1];
+                            ui.audioBadge.style.display = 'flex';
+                        };
+                        stream.getTracks().forEach(t => t.stop()); // Clean stop
+                    };
+                    
+                    mediaRecorder.start();
+                    ui.micBtn.classList.add('recording');
+                    ui.input.placeholder = "Listening...";
+                } catch (err) { 
+                    renderError("Mic Error: " + err.message + ". Check Privacy Settings.");
+                }
+            } else {
+                if(mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                }
+                ui.micBtn.classList.remove('recording');
+                ui.input.placeholder = "...";
+            }
+        }
+
+        // --- Clipboard Logic ---
+        let ignoreNextClipboard = false;
+
+        ipcRenderer.on('clipboard-changed', async (event, text) => {
+            if (!isPilotActive) return; // Wait for Launch
+            if (ignoreNextClipboard) {
+                // This change was triggered by our own Copy button
+                ignoreNextClipboard = false;
+                return;
+            }
+            // Check if Auto-Clipboard is enabled 
+            if (text.length > 5) {
+                ui.input.value = text;
+                // Visual Indicator (Subtle)
+                const toast = document.createElement('div');
+                toast.innerText = "📋";
+                toast.style.position = 'absolute';
+                toast.style.bottom = '80px';
+                toast.style.left = '50%';
+                toast.style.transform = 'translateX(-50%)';
+                toast.style.background = 'rgba(0,0,0,0.5)';
+                toast.style.padding = '4px';
+                toast.style.borderRadius = '50%';
+                toast.style.pointerEvents = 'none';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 1000);
+                
+                await runAnalysis(); 
+            }
+        });
+
+        // --- Analysis Logic ---
         async function runAnalysis() {
             const text = ui.input.value.trim();
-            if (!text) return;
-
-            // 1. Prepare UI
-            ui.btn.innerText = 'Thinking...';
+            const hasSS = ui.ssBadge.style.display !== 'none';
+            const hasAudio = !!audioBlobBase64;
+            
+            if (!text && !hasSS && !hasAudio) return;
+            
+            ui.btn.innerText = "...";
             ui.btn.disabled = true;
             ui.welcome.style.display = 'none';
             ui.output.style.display = 'block';
-            ui.output.innerHTML = '<div style="color:var(--text-muted)">Running analysis...</div>';
-
-            // 2. Invoke AI
+            
+            // Removed "Thinking..." text
+            
             try {
-                const result = await ipcRenderer.invoke('analyze-text', text);
+                const payload = {
+                    text: text,
+                    audio: audioBlobBase64,
+                    // If we have a manual screenshot attached, send it
+                    image: (hasSS && window.manualScreenshotData) ? window.manualScreenshotData : null
+                };
+
+                const result = await ipcRenderer.invoke('analyze-text', payload);
+
 
                 if (result.type === 'error') {
                     renderError(result.response);
                 } else {
-                    renderContent(result.response);
+                    renderResponse(result.response);
                 }
             } catch (e) {
                 renderError(e.message);
             }
 
-            // 3. Reset UI
-            ui.btn.innerText = 'Generate';
+            // Cleanup
+            ui.btn.innerText = 'Go';
             ui.btn.disabled = false;
-            ui.input.value = ''; // Clear input or keep it? Checking user pref. Usually clear.
+            ui.input.value = '';
             ui.input.focus();
+            window.manualScreenshotData = null;
+            ui.ssBadge.style.display = 'none';
+            clearAudio();
         }
 
-        function renderContent(markdownText) {
-            // Convert to HTML
-            const html = converter.makeHtml(markdownText);
-            ui.output.innerHTML = html;
-
-            // Syntax Highlight
-            ui.output.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightElement(block);
-            });
-
-            // Add Copy Buttons
-            addCopyButtons();
-
-            // Scroll to top of result
-            ui.scroller.scrollTop = 0;
+        function renderResponse(md) {
+            const div = document.createElement('div');
+            div.className = 'model-response';
+            div.innerHTML = converter.makeHtml(md);
+            ui.output.appendChild(div);
+            div.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+            addCopyButtons(div);
+            ui.scroller.scrollTop = ui.scroller.scrollHeight;
         }
 
+        window.changeModel = (val) => {
+            ipcRenderer.invoke('set-model-provider', val);
+        };
+        
         function renderError(msg) {
-            ui.output.innerHTML = `<div style="color: #ef4444; border-left: 2px solid #ef4444; padding-left: 10px;">${msg}</div>`;
+             const div = document.createElement('div');
+            // Stealth/Glass style error box
+            div.style.background = 'rgba(255, 0, 0, 0.1)'; 
+            div.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            div.style.borderRadius = '8px';
+            div.style.padding = '8px'; // Compact padding
+            div.style.marginTop = '12px';
+            div.style.fontSize = '12px';
+            div.style.color = '#fca5a5';
+
+            const summary = msg.length > 50 ? msg.substring(0, 50) + "..." : msg;
+            
+            const header = document.createElement('div');
+            header.style.display = 'flex';
+            header.style.justifyContent = 'space-between';
+            header.style.alignItems = 'center';
+            header.style.gap = '10px';
+
+            const textSpan = document.createElement('span');
+            textSpan.innerText = "⚠ " + summary;
+            header.appendChild(textSpan);
+
+            if (msg.length > 50) {
+                const btn = document.createElement('button');
+                btn.innerText = "Show More";
+                btn.style.background = 'rgba(255,255,255,0.1)';
+                btn.style.border = 'none';
+                btn.style.color = '#fff';
+                btn.style.fontSize = '10px';
+                btn.style.cursor = 'pointer';
+                btn.style.borderRadius = '4px';
+                btn.style.padding = '4px 8px';
+                
+                const fullText = document.createElement('div');
+                fullText.style.display = 'none';
+                fullText.style.marginTop = '8px';
+                fullText.style.whiteSpace = 'pre-wrap';
+                fullText.style.maxHeight = '100px'; // Scrollable container
+                fullText.style.overflowY = 'auto'; // Prevent overflow
+                fullText.style.background = 'rgba(0,0,0,0.3)';
+                fullText.style.padding = '5px';
+                fullText.style.borderRadius = '4px';
+                fullText.style.fontSize = '11px';
+                fullText.style.color = '#f87171';
+                fullText.innerText = msg;
+
+                btn.onclick = () => {
+                    const isHidden = fullText.style.display === 'none';
+                    fullText.style.display = isHidden ? 'block' : 'none';
+                    btn.innerText = isHidden ? "Show Less" : "Show More";
+                };
+
+                header.appendChild(btn);
+                div.appendChild(header);
+                div.appendChild(fullText);
+            } else {
+                div.appendChild(header);
+            }
+
+            console.error(msg);
+            ipcRenderer.send('log-error', msg);
+            ui.output.appendChild(div);
+            ui.scroller.scrollTop = ui.scroller.scrollHeight;
         }
 
-        function addCopyButtons() {
-            const preBlocks = ui.output.querySelectorAll('pre');
-            preBlocks.forEach(pre => {
-                // Create Button
+        function addCopyButtons(container) {
+            container.querySelectorAll('pre').forEach(pre => {
                 const btn = document.createElement('button');
                 btn.className = 'copy-btn';
                 btn.innerText = 'Copy';
-
-                // Click Handler
-                btn.addEventListener('click', async () => {
+                btn.onclick = async () => {
+                    ignoreNextClipboard = true; 
                     const code = pre.querySelector('code').innerText;
-                    try {
-                        await navigator.clipboard.writeText(code);
-                        // Feedback
-                        btn.innerText = 'Copied!';
-                        btn.classList.add('copied');
-                        setTimeout(() => {
-                            btn.innerText = 'Copy';
-                            btn.classList.remove('copied');
-                        }, 2000);
-                    } catch (err) {
-                        btn.innerText = 'Error';
-                    }
-                });
-
+                    await navigator.clipboard.writeText(code);
+                    
+                    btn.innerText = 'OK';
+                    setTimeout(() => btn.innerText = 'Copy', 2000);
+                    setTimeout(() => ignoreNextClipboard = false, 1000);
+                };
                 pre.appendChild(btn);
             });
         }
 
-        // Input Handling
-        ui.input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                runAnalysis();
-            }
-            if (e.key === 'Escape') {
-                const modal = document.getElementById('settingsModal');
-                if (modal.style.display !== 'none') {
-                    toggleSettings();
-                } else {
-                    window.minimize();
-                }
-            }
-        });
-
-        // Settings Modal Functions
-        function toggleSettings() {
-            const modal = document.getElementById('settingsModal');
-            modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
-        }
-
-        async function saveApiKey() {
-            const input = document.getElementById('apiKeyInput');
-            const status = document.getElementById('apiKeyStatus');
-            const apiKey = input.value.trim();
-
-            if (!apiKey) {
-                status.innerHTML = '<span style="color: #ef4444;">Please enter an API key</span>';
+        // --- Live Mode ---
+        async function toggleLiveMode() {
+            const btn = document.getElementById('liveModeBtn');
+            if (liveModeActive) {
+                liveModeActive = false;
+                if (liveModeInterval) clearInterval(liveModeInterval);
+                if (liveStream) liveStream.getTracks().forEach(t => t.stop());
+                btn.classList.remove('active');
                 return;
             }
-
-            status.innerHTML = '<span style="color: var(--text-muted);">Validating key...</span>';
-
-            const result = await ipcRenderer.invoke('save-api-key', apiKey);
-
-            if (result.success) {
-                status.innerHTML = '<span style="color: #10b981;">✓ API key saved successfully!</span>';
-                // Update status indicator
-                document.querySelector('.status-indicator').style.background = '#10b981';
-                document.querySelector('.status-indicator').style.boxShadow = '0 0 12px #10b981';
-                setTimeout(() => {
-                    toggleSettings();
-                    status.innerHTML = '';
-                }, 1500);
-            } else {
-                status.innerHTML = `<span style="color: #ef4444;">✗ ${result.error}</span>`;
-            }
+            try {
+                // Ensure we ask for system audio
+                liveStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { width: 1920 },
+                    audio: { echoCancellation: false },
+                    systemAudio: "include"
+                });
+                liveModeActive = true;
+                btn.classList.add('active');
+                processLiveLoop();
+                liveModeInterval = setInterval(processLiveLoop, 10000);
+            } catch(e) { console.error(e); }
         }
 
-        // Check if API key is configured on startup
-        async function checkApiKeyOnStartup() {
-            const hasKey = await ipcRenderer.invoke('check-api-key');
-            const indicator = document.querySelector('.status-indicator');
+        async function processLiveLoop() {
+            if (!liveModeActive || !liveStream) return;
+            // 1. Snapshot
+            let imgBase64 = null;
+            try {
+                const track = liveStream.getVideoTracks()[0];
+                const imageCapture = new ImageCapture(track);
+                const bitmap = await imageCapture.grabFrame();
+                const canvas = document.createElement('canvas');
+                canvas.width = bitmap.width; canvas.height = bitmap.height;
+                canvas.getContext('2d').drawImage(bitmap, 0, 0);
+                imgBase64 = canvas.toDataURL('image/png').split(',')[1];
+            } catch(e) { /* fallback video elem logic omitted for brevity, keeping simple */ }
+            
+            // 2. Audio (Optional 5s clip - Capturing 'participants' as they speak)
+            // To improve detection: We should ideally only send if volume > threshold, but strictly:
+            // The prompt handles "Silence" -> "NO_ACTION".
+            let audioBase64 = null;
+            if (liveStream.getAudioTracks().length > 0) {
+                 const audioBlob = await recordStreamAudio(liveStream, 5000);
+                 if (audioBlob.size > 0) audioBase64 = await blobToBase64(audioBlob);
+            }
 
-            if (hasKey) {
-                indicator.style.background = '#10b981';
-                indicator.style.boxShadow = '0 0 12px #10b981';
-            } else {
-                indicator.style.background = '#f59e0b';
-                indicator.style.boxShadow = '0 0 12px #f59e0b';
-                // Show setup message
-                ui.welcome.innerHTML = `
-                    <p style="font-size: 24px; margin-bottom: 8px;">🔑</p>
-                    <p>API Key Required</p>
-                    <p style="font-size: 12px; margin-top: 8px;">Click the ⚙️ icon to add your Gemini API key</p>
-                `;
+            if (imgBase64 || audioBase64) {
+                 // Enhanced Prompt for Meeting Context
+                 const prompt = `
+                 CONTEXT: Live Meeting/Interview. 
+                 TASKS:
+                 1. READ CHAT MESSAGES in the screenshot. If a new question appears in chat, ANSWER IT.
+                 2. LISTEN TO AUDIO. If a participant asks a question, ANSWER IT.
+                 3. If nothing relevant is happening, output EXACTLY: "NO_ACTION".
+                 4. If answering, format as: "**Question:** [The question]\n\n**Answer:** [Concise Answer]"
+                 `;
+                 
+                 const res = await ipcRenderer.invoke('analyze-text', { text: prompt, image: imgBase64, audio: audioBase64 });
+                 if(res.type !== 'error' && !res.response.includes('NO_ACTION')) {
+                     // Play a subtle sound or flash?
+                     renderResponse(res.response);
+                 }
             }
         }
+        
+        function recordStreamAudio(stream, duration) {
+            return new Promise((resolve, reject) => {
+                const recorder = new MediaRecorder(stream);
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => resolve(new Blob(chunks, { type: 'audio/webm' }));
+                recorder.onerror = e => reject(e);
+                recorder.start();
+                setTimeout(() => recorder.stop(), duration);
+            });
+        }
+        
+        function blobToBase64(blob) {
+            return new Promise((resolve, _) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+        }
 
-        checkApiKeyOnStartup();
+        // --- Settings ---
+        window.toggleSettings = async () => {
+             const m = document.getElementById('settingsModal');
+             if (m.style.display !== 'flex') {
+                 // Open: Fetch existing keys
+                 const settings = await ipcRenderer.invoke('get-settings');
+                 if (settings) {
+                     document.getElementById('apiKeyInput').value = settings.GEMINI_API_KEY || '';
+                     document.getElementById('groqKeyInput').value = settings.GROQ_API_KEY || '';
+                     document.getElementById('claudeKeyInput').value = settings.CLAUDE_API_KEY || '';
+                     document.getElementById('deepseekKeyInput').value = settings.DEEP_SEEK_API_KEY || '';
+                     document.getElementById('openrouterKeyInput').value = settings.OPENROUTER_API_KEY || '';
+                     document.getElementById('openrouterModelInput').value = settings.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+                 }
+                 m.style.display = 'flex';
+             } else {
+                 m.style.display = 'none';
+             }
+        };
 
-        // Auto-focus
-        ui.input.focus();
+        window.saveSettings = async () => {
+            const config = {
+                GEMINI_API_KEY: document.getElementById('apiKeyInput').value.trim(),
+                GROQ_API_KEY: document.getElementById('groqKeyInput').value.trim(),
+                CLAUDE_API_KEY: document.getElementById('claudeKeyInput').value.trim(),
+                DEEP_SEEK_API_KEY: document.getElementById('deepseekKeyInput').value.trim(),
+                OPENROUTER_API_KEY: document.getElementById('openrouterKeyInput').value.trim(),
+                OPENROUTER_MODEL: document.getElementById('openrouterModelInput').value.trim() || 'google/gemini-2.0-flash-exp:free'
+            };
 
+            const res = await ipcRenderer.invoke('save-settings', config);
+            if (res.success) {
+                document.getElementById('apiKeyStatus').innerText = "Settings Saved!";
+                document.getElementById('apiKeyStatus').style.color = "#10b981";
+                setTimeout(toggleSettings, 1000);
+            } else {
+                document.getElementById('apiKeyStatus').innerText = res.error;
+                document.getElementById('apiKeyStatus').style.color = "#ef4444";
+            }
+        };
+        
+        async function checkKey() {
+            // Just check if we have the primary key for the indicator
+             const settings = await ipcRenderer.invoke('get-settings');
+             const has = settings && settings.GEMINI_API_KEY;
+             document.querySelector('.status-indicator').style.background = has ? '#10b981' : '#f59e0b';
+        }
+        checkKey();
+
+        // Shortcuts
+        ui.input.onkeydown = (e) => {
+            if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAnalysis(); }
+        }
     </script>
 </body>
-
 </html>
