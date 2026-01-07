@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "build:win": "electron-builder --win",
+    "build:win": "set \"ELECTRON_BUILDER_CACHE=%CD%\\.cache\" && electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux"
   },

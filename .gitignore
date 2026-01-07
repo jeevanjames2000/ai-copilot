@@ -26,9 +26,13 @@ dist/
 build/
 out/
 release/
+.cache/
 
 # Electron
 *.log
+
+# Scripts
+*.bat
 
 # Legacy Folders (From previous refactoring)
 _legacy_client/
