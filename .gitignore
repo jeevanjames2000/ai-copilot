@@ -21,12 +21,16 @@ Desktop.ini
 *.swp
 *.swo
 
-# Build/Dist
+# Build output (electron-builder writes here)
 dist/
-build/
 out/
 release/
 .cache/
+
+# NOTE: build/ is deliberately NOT ignored — it holds the app icons
+# (build/icon.icns, build/icon.ico, build/icon.png) that electron-builder
+# needs. Git cannot re-include files under an ignored directory, so this
+# entry must stay removed or CI will produce unbranded builds.
 
 # Electron
 *.log

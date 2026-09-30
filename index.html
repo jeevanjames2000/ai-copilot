@@ -6,6 +6,8 @@
     <title>AI Copilot</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
+    <!-- Bundled copy, loaded after the CDN so it wins when the app is packaged. -->
+    <link rel="stylesheet" href="node_modules/highlight.js/styles/github-dark-dimmed.min.css">
 
     <style>
         :root {
@@ -295,17 +297,34 @@
             font-family: inherit;
             font-size: 11px;
             margin-left: 10px;
-            margin-right: auto;
+            margin-right: 6px;
             cursor: pointer;
             outline: none;
             appearance: none; /* Remove default arrow */
             -webkit-app-region: no-drag;
-         " title="Select Model Priority">
-             <option value="gemini">Gemini Auto</option>
-             <option value="groq">Groq (Free/Fast)</option>
-             <option value="claude">Claude 3.5</option>
+         " title="Select Provider">
+             <option value="gemini">Gemini</option>
+             <option value="groq">Groq</option>
+             <option value="claude">Claude</option>
              <option value="deepseek">DeepSeek</option>
              <option value="openrouter">OpenRouter</option>
+         </select>
+
+         <!-- Live model list for the selected provider -->
+         <select id="modelVersionSelector" onchange="changeModelVersion(this.value)" style="
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 11px;
+            margin-right: auto;
+            max-width: 150px;
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            -webkit-app-region: no-drag;
+         " title="Model (refreshed from the provider)">
+             <option value="">Latest (auto)</option>
          </select>
 
          <div class="window-controls">
@@ -377,11 +396,28 @@
             <label style="font-size: 11px; color: var(--text-muted);">OpenRouter API Key (Optional)</label>
             <input type="password" id="openrouterKeyInput" placeholder="sk-or-..." style="margin-bottom: 8px;">
 
-            <label style="font-size: 11px; color: var(--text-muted);">OpenRouter Model ID</label>
-            <input type="text" id="openrouterModelInput" placeholder="google/gemini-2.0-flash-exp:free" style="margin-bottom: 12px; font-family: monospace; font-size: 11px;">
+            <label style="font-size: 11px; color: var(--text-muted);">OpenRouter Model</label>
+            <select id="openrouterModelInput" style="margin-bottom: 12px; font-family: monospace; font-size: 11px; width: 100%;">
+                <option value="">Latest free model (auto)</option>
+            </select>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px;">
+                <span id="modelRefreshStatus" style="font-size: 10px; color: #64748b;"></span>
+                <button class="action-btn" onclick="refreshModels()" title="Re-fetch model lists from every provider">↻ Refresh models</button>
+            </div>
+
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+                <input type="checkbox" id="followScreenInput" checked style="width: auto; margin: 0;">
+                Follow my active screen
+            </label>
+
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+                <input type="checkbox" id="autoRunInput" checked style="width: auto; margin: 0;">
+                Auto-send on copy (off = paste only)
+            </label>
 
             <div id="apiKeyStatus" style="font-size: 12px; margin-bottom: 12px; height: 16px;"></div>
-            
+
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
                 <button class="action-btn" onclick="toggleSettings()">Cancel</button>
                 <button class="action-btn send-btn" onclick="saveSettings()">Save</button>
@@ -390,20 +426,34 @@
     </div>
 
     <!-- Scripts -->
-    <script>
-        const { ipcRenderer } = require('electron');
-        let showdown, hljs;
-        try { showdown = require('showdown'); hljs = require('highlight.js'); } catch(e){}
-
-        // OVERRIDE ALERT FOR SILENCE
-        window.alert = (msg) => { console.log("Suppressed Alert:", msg); };
-    </script>
+    <!-- CDN copies load FIRST so they can act as a real fallback. In a packaged
+         build the bundled node_modules copies are used and these simply fail
+         offline, which is harmless. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
     <script>
-        const converter = new showdown.Converter({ simpleLineBreaks: true, openLinksInNewWindow: true });
-        
+        const { ipcRenderer } = require('electron');
+
+        // A top-level `let` shadows the matching window.* global, so assigning
+        // the CDN copy here is what actually makes the fallback work.
+        let showdown, hljs;
+        try { showdown = require('showdown'); } catch (e) { /* use CDN copy */ }
+        try { hljs = require('highlight.js'); } catch (e) { /* use CDN copy */ }
+        showdown = showdown || window.showdown;
+        hljs = hljs || window.hljs;
+
+        // OVERRIDE ALERT FOR SILENCE
+        window.alert = (msg) => { console.log("Suppressed Alert:", msg); };
+    </script>
+
+    <script>
+        // Plain-text rendering beats a dead UI if neither copy resolved.
+        const converter = showdown
+            ? new showdown.Converter({ simpleLineBreaks: true, openLinksInNewWindow: true })
+            : { makeHtml: (t) => '<pre>' + String(t).replace(/[&<>]/g,
+                  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</pre>' };
+
         const ui = {
             input: document.getElementById('promptInput'),
             btn: document.getElementById('runBtn'),
@@ -435,6 +485,7 @@
             setTimeout(() => {
                 launcher.style.display = 'none';
                 isPilotActive = true;
+                if (window.applyPendingClipboard) window.applyPendingClipboard();
             }, 300);
         };
         
@@ -537,15 +588,29 @@
 
         // --- Clipboard Logic ---
         let ignoreNextClipboard = false;
+        let autoRunOnCopy = true; // synced from settings below
+
+        // A copy made before the user hits Launch used to be dropped on the
+        // floor; hold on to it and paste it once the pilot is active.
+        let pendingClipboard = null;
+
+        window.applyPendingClipboard = () => {
+            if (pendingClipboard && ui.input && !ui.input.value) {
+                ui.input.value = pendingClipboard;
+            }
+            pendingClipboard = null;
+        };
 
         ipcRenderer.on('clipboard-changed', async (event, text) => {
-            if (!isPilotActive) return; // Wait for Launch
+            if (!isPilotActive) {
+                pendingClipboard = text;
+                return;
+            }
             if (ignoreNextClipboard) {
                 // This change was triggered by our own Copy button
                 ignoreNextClipboard = false;
                 return;
             }
-            // Check if Auto-Clipboard is enabled 
             if (text.length > 5) {
                 ui.input.value = text;
                 // Visual Indicator (Subtle)
@@ -561,8 +626,10 @@
                 toast.style.pointerEvents = 'none';
                 document.body.appendChild(toast);
                 setTimeout(() => toast.remove(), 1000);
-                
-                await runAnalysis(); 
+
+                // Auto-running on every copy burns free-tier quota fast, so it
+                // is a setting. Off means the text is still pasted, ready to send.
+                if (autoRunOnCopy) await runAnalysis();
             }
         });
 
@@ -573,7 +640,8 @@
             const hasAudio = !!audioBlobBase64;
             
             if (!text && !hasSS && !hasAudio) return;
-            
+
+            let requestFailed = false;
             ui.btn.innerText = "...";
             ui.btn.disabled = true;
             ui.welcome.style.display = 'none';
@@ -594,17 +662,22 @@
 
                 if (result.type === 'error') {
                     renderError(result.response);
+                    requestFailed = true;
                 } else {
                     renderResponse(result.response);
                 }
             } catch (e) {
                 renderError(e.message);
+                requestFailed = true;
             }
 
             // Cleanup
             ui.btn.innerText = 'Go';
             ui.btn.disabled = false;
-            ui.input.value = '';
+            // Keep the prompt on failure so it can be retried — clearing it
+            // threw away auto-pasted clipboard text the instant a call failed,
+            // which looked like the paste itself had stopped working.
+            if (!requestFailed) ui.input.value = '';
             ui.input.focus();
             window.manualScreenshotData = null;
             ui.ssBadge.style.display = 'none';
@@ -616,14 +689,82 @@
             div.className = 'model-response';
             div.innerHTML = converter.makeHtml(md);
             ui.output.appendChild(div);
-            div.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+            if (hljs) div.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
             addCopyButtons(div);
             ui.scroller.scrollTop = ui.scroller.scrollHeight;
         }
 
-        window.changeModel = (val) => {
-            ipcRenderer.invoke('set-model-provider', val);
+        // --- Live model list ---------------------------------------------
+        // The model dropdown is never hardcoded; it is filled from whatever
+        // the provider reports today, so retired ids can't linger in the UI.
+        let currentProvider = 'gemini';
+
+        function fillSelect(select, models, selected) {
+            select.innerHTML = '';
+            const auto = document.createElement('option');
+            auto.value = '';
+            auto.innerText = models.length ? `Latest (${models[0]})` : 'Latest (auto)';
+            select.appendChild(auto);
+            for (const id of models) {
+                const o = document.createElement('option');
+                o.value = id;
+                o.innerText = id;
+                select.appendChild(o);
+            }
+            select.value = models.includes(selected) ? selected : '';
+        }
+
+        async function loadModels(provider, { force = false } = {}) {
+            const sel = document.getElementById('modelVersionSelector');
+            try {
+                const res = await ipcRenderer.invoke('get-models', provider, { force });
+                const models = (res && res.models) || [];
+                const pinned = await ipcRenderer.invoke('get-settings');
+                const chosen = (pinned && pinned.SELECTED_MODELS && pinned.SELECTED_MODELS[provider]) || '';
+                fillSelect(sel, models, chosen);
+            } catch (e) {
+                ipcRenderer.send('log-error', 'loadModels: ' + e.message);
+            }
+        }
+
+        window.changeModel = async (val) => {
+            currentProvider = val;
+            await ipcRenderer.invoke('set-model-provider', val);
+            loadModels(val);
         };
+
+        window.changeModelVersion = (val) => {
+            // '' means "always use the newest the provider offers"
+            ipcRenderer.invoke('set-model', currentProvider, val || null);
+        };
+
+        window.refreshModels = async () => {
+            const status = document.getElementById('modelRefreshStatus');
+            if (status) status.innerText = 'Refreshing…';
+            const res = await ipcRenderer.invoke('refresh-models');
+            if (status) {
+                status.innerText = res && res.success
+                    ? 'Model lists updated'
+                    : 'Refresh failed: ' + ((res && res.error) || 'unknown');
+            }
+            await loadModels(currentProvider, { force: false });
+            await loadOpenRouterModels();
+        };
+
+        async function loadOpenRouterModels() {
+            const sel = document.getElementById('openrouterModelInput');
+            if (!sel) return;
+            const res = await ipcRenderer.invoke('get-models', 'openrouter');
+            const settings = await ipcRenderer.invoke('get-settings');
+            const chosen = (settings && settings.SELECTED_MODELS && settings.SELECTED_MODELS.openrouter)
+                || (settings && settings.OPENROUTER_MODEL) || '';
+            fillSelect(sel, (res && res.models) || [], chosen);
+        }
+
+        // Main process tells us when the background catalog fetch lands.
+        ipcRenderer.on('models-updated', () => loadModels(currentProvider));
+
+        loadModels(currentProvider);
         
         function renderError(msg) {
              const div = document.createElement('div');
@@ -807,8 +948,10 @@
                      document.getElementById('claudeKeyInput').value = settings.CLAUDE_API_KEY || '';
                      document.getElementById('deepseekKeyInput').value = settings.DEEP_SEEK_API_KEY || '';
                      document.getElementById('openrouterKeyInput').value = settings.OPENROUTER_API_KEY || '';
-                     document.getElementById('openrouterModelInput').value = settings.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+                     document.getElementById('followScreenInput').checked = settings.FOLLOW_ACTIVE_SCREEN !== false;
+                     document.getElementById('autoRunInput').checked = settings.AUTO_RUN_ON_COPY !== false;
                  }
+                 await loadOpenRouterModels();
                  m.style.display = 'flex';
              } else {
                  m.style.display = 'none';
@@ -822,8 +965,12 @@
                 CLAUDE_API_KEY: document.getElementById('claudeKeyInput').value.trim(),
                 DEEP_SEEK_API_KEY: document.getElementById('deepseekKeyInput').value.trim(),
                 OPENROUTER_API_KEY: document.getElementById('openrouterKeyInput').value.trim(),
-                OPENROUTER_MODEL: document.getElementById('openrouterModelInput').value.trim() || 'google/gemini-2.0-flash-exp:free'
+                // '' = always use the newest model the provider reports
+                OPENROUTER_MODEL: document.getElementById('openrouterModelInput').value || '',
+                FOLLOW_ACTIVE_SCREEN: document.getElementById('followScreenInput').checked,
+                AUTO_RUN_ON_COPY: document.getElementById('autoRunInput').checked
             };
+            autoRunOnCopy = config.AUTO_RUN_ON_COPY;
 
             const res = await ipcRenderer.invoke('save-settings', config);
             if (res.success) {
@@ -841,6 +988,7 @@
              const settings = await ipcRenderer.invoke('get-settings');
              const has = settings && settings.GEMINI_API_KEY;
              document.querySelector('.status-indicator').style.background = has ? '#10b981' : '#f59e0b';
+             autoRunOnCopy = !settings || settings.AUTO_RUN_ON_COPY !== false;
         }
         checkKey();
 
