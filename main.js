@@ -175,6 +175,7 @@ function switchToNextModel() {
 
 const DEFAULT_SIZE = { width: 500, height: 600 };
 const EDGE_MARGIN = 20;
+const isWindows = process.platform === 'win32';
 
 /** The display the user is actually looking at, i.e. the one with the cursor. */
 function getActiveDisplay() {
@@ -320,7 +321,11 @@ function createWindow() {
     ...start,
     title: 'Sticky Notes', // Camouflage
     frame: false,
-    transparent: true,
+    // Transparent frameless windows on Windows have long-standing input and
+    // compositing bugs — the window paints but clicks never reach the page.
+    // Windows gets an opaque window instead; macOS/Linux keep the glass look.
+    transparent: !isWindows,
+    backgroundColor: isWindows ? '#0b1220' : undefined,
     alwaysOnTop: true,
     resizable: true,
     hasShadow: false,

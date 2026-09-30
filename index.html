@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Copilot</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
-    <!-- Bundled copy, loaded after the CDN so it wins when the app is packaged. -->
+    <!-- No external stylesheets. A remote <link> blocks execution of every
+         script that follows it, so on a machine that cannot reach the CDN the
+         whole UI stays dead until the request times out. Everything the app
+         needs is bundled. -->
     <link rel="stylesheet" href="node_modules/highlight.js/styles/github-dark-dimmed.min.css">
 
     <style>
@@ -426,11 +427,33 @@
     </div>
 
     <!-- Scripts -->
-    <!-- CDN copies load FIRST so they can act as a real fallback. In a packaged
-         build the bundled node_modules copies are used and these simply fail
-         offline, which is harmless. -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        // Bootstrap. Depends on nothing, runs first, and makes any later
+        // failure visible — a silent script error used to leave every button
+        // dead with no clue why.
+        (function () {
+            function showFatal(msg) {
+                try {
+                    var d = document.getElementById('__fatal') || document.createElement('div');
+                    d.id = '__fatal';
+                    d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                        'background:#7f1d1d;color:#fff;font:12px/1.5 monospace;padding:8px;' +
+                        'white-space:pre-wrap;max-height:50%;overflow:auto';
+                    d.textContent = 'Startup error — press Ctrl/Cmd+Shift+I for details\n' + msg;
+                    (document.body || document.documentElement).appendChild(d);
+                    if (window.require) {
+                        window.require('electron').ipcRenderer.send('log-error', msg);
+                    }
+                } catch (_) { /* nothing more we can do */ }
+            }
+            window.addEventListener('error', function (e) {
+                showFatal(e.message + '\n  at ' + (e.filename || '?') + ':' + e.lineno);
+            });
+            window.addEventListener('unhandledrejection', function (e) {
+                showFatal('Unhandled promise rejection: ' + ((e.reason && e.reason.message) || e.reason));
+            });
+        })();
+    </script>
 
     <script>
         const { ipcRenderer } = require('electron');
@@ -438,8 +461,8 @@
         // A top-level `let` shadows the matching window.* global, so assigning
         // the CDN copy here is what actually makes the fallback work.
         let showdown, hljs;
-        try { showdown = require('showdown'); } catch (e) { /* use CDN copy */ }
-        try { hljs = require('highlight.js'); } catch (e) { /* use CDN copy */ }
+        try { showdown = require('showdown'); } catch (e) { console.error('showdown:', e.message); }
+        try { hljs = require('highlight.js'); } catch (e) { console.error('highlight.js:', e.message); }
         showdown = showdown || window.showdown;
         hljs = hljs || window.hljs;
 
