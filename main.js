@@ -129,6 +129,13 @@ function initializeAI(apiKey, history = []) {
  *   missing   - the model is gone from the API
  *   transient - overload, rate limit, network; the SAME model may work later
  */
+/** A provider with no key isn't a failure, it's just not set up yet. */
+function missingKeyError(label) {
+  const e = new Error(`${label} is not configured`);
+  e.code = 'NO_KEY';
+  return e;
+}
+
 function classifyModelError(msg = '') {
   if (/\b401\b|\b403\b|api key not valid|permission denied|unauthorized/i.test(msg)) return 'fatal';
   if (
@@ -351,6 +358,13 @@ function registerShortcuts() {
     else showOverlay({ focus: true });
   });
 
+  // Open DevTools in a packaged build. Without this a renderer error is
+  // invisible: the window paints but nothing responds.
+  globalShortcut.register('CommandOrControl+Shift+I', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.toggleDevTools();
+  });
+
   // Yank the overlay to the screen the cursor is on, right now.
   globalShortcut.register('CommandOrControl+Shift+D', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -461,7 +475,7 @@ app.on('will-quit', () => {
 
 async function callGroq(userMsg, systemPrompt) {
   const key = await getProviderKey('GROQ_API_KEY');
-  if (!key) throw new Error('No Groq Key');
+  if (!key) throw missingKeyError('Groq');
   const modelId = await modelFor('groq');
 
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -492,7 +506,7 @@ async function callGroq(userMsg, systemPrompt) {
 
 async function callClaude(userMsg, systemPrompt, imageBase64) {
   const key = await getProviderKey('CLAUDE_API_KEY');
-  if (!key) throw new Error('No Claude Key');
+  if (!key) throw missingKeyError('Claude');
   const modelId = await modelFor('claude');
 
   const content = [];
@@ -536,7 +550,7 @@ async function callClaude(userMsg, systemPrompt, imageBase64) {
 
 async function callDeepSeek(userMsg, systemPrompt) {
   const key = await getProviderKey('DEEP_SEEK_API_KEY');
-  if (!key) throw new Error('No DeepSeek Key');
+  if (!key) throw missingKeyError('DeepSeek');
   const modelId = await modelFor('deepseek');
 
   const response = await fetch('https://api.deepseek.com/chat/completions', {
@@ -562,7 +576,7 @@ async function callDeepSeek(userMsg, systemPrompt) {
 
 async function callOpenRouter(userMsg, systemPrompt) {
   const key = await getProviderKey('OPENROUTER_API_KEY');
-  if (!key) throw new Error('No OpenRouter Key');
+  if (!key) throw missingKeyError('OpenRouter');
   const modelId = await modelFor('openrouter');
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -584,8 +598,13 @@ async function callOpenRouter(userMsg, systemPrompt) {
 
   if (!response.ok) {
     const errBody = await response.text().catch(() => 'No Body');
-    if (response.status === 429) throw new Error('OpenRouter: Rate Limit (429)');
-    if (response.status === 402) throw new Error('OpenRouter: No Credits (402)');
+    if (response.status === 429) throw new Error('OpenRouter: rate limited (free tier is 20/min, 50/day)');
+    if (response.status === 402) throw new Error('OpenRouter: out of credits (402)');
+    if (response.status === 401) {
+      // "User not found" here means the key itself was rejected — a free
+      // account still needs a valid key, so this is a setup problem.
+      throw new Error('OpenRouter: API key rejected. Check the key in Settings (⚙).');
+    }
     throw new Error(`OpenRouter ${response.status}: ${errBody}`);
   }
   const data = await response.json();
@@ -715,9 +734,15 @@ ipcMain.handle('analyze-text', async (event, payload) => {
     console.log('Analyzing with provider:', activeProvider);
 
     const runGemini = async () => {
-      if (!model) throw new Error('Gemini not initialized');
+      if (!model) {
+        const key = await getProviderKey('GEMINI_API_KEY');
+        if (!key) throw missingKeyError('Gemini');
+        throw new Error('Gemini is not initialized');
+      }
       let attempts = 0;
       let sweeps = 0;
+      const tried = new Set();
+      const MAX_TRANSIENT_TRIES = 4;
       // Room for one walk down the chain, plus one retry sweep after a pause.
       const maxAttempts = Math.max(geminiModels.length, 1) * 2 + 2;
       while (attempts < maxAttempts) {
@@ -752,12 +777,14 @@ ipcMain.handle('analyze-text', async (event, payload) => {
           // Overloaded or rate limited: the model is fine, the moment isn't.
           // Try the next one down the chain rather than giving up.
           if (kind === 'transient') {
-            if (switchToNextModel()) {
+            tried.add(failed);
+            // Don't walk all 40 models on a demand spike — if a handful in a
+            // row are busy the whole tier is, and each try costs a round trip.
+            if (tried.size < MAX_TRANSIENT_TRIES && switchToNextModel()) {
               attempts++;
               continue;
             }
-            // Whole chain is busy — a demand spike usually hits several models
-            // at once, so pause briefly and sweep from the top one more time.
+            // Pause once and retry from the top; spikes are usually brief.
             if (sweeps < 1) {
               sweeps++;
               await new Promise((r) => setTimeout(r, 1500));
@@ -767,7 +794,9 @@ ipcMain.handle('analyze-text', async (event, payload) => {
                 continue;
               }
             }
-            throw new Error(`All Gemini models are busy right now. Last tried ${failed}.`);
+            throw new Error(
+              `Gemini is overloaded — tried ${tried.size} model(s): ${[...tried].join(', ')}. This is temporary; retry shortly.`
+            );
           }
 
           throw e;
@@ -792,36 +821,49 @@ ipcMain.handle('analyze-text', async (event, payload) => {
       if (activeProvider === 'openrouter') return await runOpenRouter();
       return await runGemini();
     } catch (primaryErr) {
-      const errors = [`${activeProvider}: ${primaryErr.message}`];
+      // A provider with no key never had a chance, so it is reported as setup
+      // advice rather than mixed in with genuine failures.
+      const failures = [];
+      const unconfigured = [];
+      const record = (label, e) => {
+        if (e && e.code === 'NO_KEY') return unconfigured.push(label);
+        // Several provider errors already start with their own name; don't
+        // print "OpenRouter: OpenRouter: ...".
+        const msg = String((e && e.message) || 'unknown error').replace(
+          new RegExp(`^${label}\\s*:\\s*`, 'i'),
+          ''
+        );
+        failures.push(`${label}: ${msg}`);
+      };
+
+      const PROVIDERS = [
+        ['Gemini', 'gemini', runGemini],
+        ['Groq', 'groq', runGroq],
+        ['Claude', 'claude', runClaude],
+        ['DeepSeek', 'deepseek', runDeepSeek],
+        ['OpenRouter', 'openrouter', runOpenRouter],
+      ];
+
+      const primaryLabel = (PROVIDERS.find((p) => p[1] === activeProvider) || [activeProvider])[0];
+      record(primaryLabel, primaryErr);
       console.error(`${activeProvider} failed:`, primaryErr.message);
 
-      try {
-        if (activeProvider !== 'groq') return await runGroq();
-      } catch (e) {
-        errors.push(`Groq: ${e.message}`);
-      }
-      try {
-        if (activeProvider !== 'gemini') return await runGemini();
-      } catch (e) {
-        errors.push(`Gemini: ${e.message}`);
-      }
-      try {
-        if (activeProvider !== 'claude') return await runClaude();
-      } catch (e) {
-        errors.push(`Claude: ${e.message}`);
-      }
-      try {
-        if (activeProvider !== 'deepseek') return await runDeepSeek();
-      } catch (e) {
-        errors.push(`DeepSeek: ${e.message}`);
-      }
-      try {
-        if (activeProvider !== 'openrouter') return await runOpenRouter();
-      } catch (e) {
-        errors.push(`OpenRouter: ${e.message}`);
+      for (const [label, id, run] of PROVIDERS) {
+        if (id === activeProvider) continue;
+        try {
+          return await run();
+        } catch (e) {
+          record(label, e);
+        }
       }
 
-      return { type: 'error', response: `All Providers Failed:\n${errors.join('\n')}` };
+      let out = failures.length
+        ? `Couldn't get a response:\n${failures.join('\n')}`
+        : 'No AI provider is configured yet.';
+      if (unconfigured.length) {
+        out += `\n\nNot set up: ${unconfigured.join(', ')}. Add a key in Settings (⚙) to give the fallback chain somewhere to go.`;
+      }
+      return { type: 'error', response: out };
     }
   } catch (fatalErr) {
     console.error('Fatal analyze-text error:', fatalErr);
