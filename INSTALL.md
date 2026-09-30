@@ -27,14 +27,23 @@ Not sure? Click  → **About This Mac**. If "Chip" says Apple, use arm64.
 
 **If macOS says the app "is damaged and can't be opened":**
 
-That message is misleading — the app is fine, macOS just quarantines unsigned
-downloads. Open **Terminal** and run:
+Nothing is corrupt. macOS says "damaged" when a downloaded app has no code
+signature it can check — on Apple Silicon it refuses to run such a binary at
+all. Builds from v1.1.9 onward are ad-hoc signed, which fixes this.
+
+For an older build, or if you still see it, open **Terminal** and run:
 
 ```bash
 xattr -cr "/Applications/AI Copilot.app"
+codesign --force --deep --sign - "/Applications/AI Copilot.app"
 ```
 
-Then open it normally.
+The first line clears the download quarantine flag; the second adds an ad-hoc
+signature. Then open the app normally.
+
+You will still see "unidentified developer" once — that's the expected prompt
+for any app without a paid Apple Developer ID, and right-click → **Open**
+gets past it.
 
 **Grant permissions.** Two features need explicit access:
 
