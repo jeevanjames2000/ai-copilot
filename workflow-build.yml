@@ -1,0 +1,86 @@
+name: Build installers
+
+# Each OS builds on its own runner. macOS installers in particular CANNOT be
+# produced on Linux or Windows — Apple's packaging tools only run on macOS —
+# so this matrix is the only way to get all three from one push.
+
+on:
+  push:
+    tags: ['v*'] # pushing a tag like v1.0.1 publishes a release
+  workflow_dispatch: # or run it by hand from the Actions tab
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS
+            cmd: npm run dist:mac
+          - os: windows-latest
+            name: Windows
+            cmd: npm run dist:win
+          - os: ubuntu-latest
+            name: Linux
+            cmd: npm run dist:linux
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # This job only builds files. Publishing happens in the release job below,
+    # so it needs no write access.
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build
+        run: ${{ matrix.cmd }}
+        env:
+          # Skip code signing — these are unsigned builds.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # NOTE: deliberately no GH_TOKEN here. If electron-builder sees a
+          # token while a tag is checked out it publishes a release itself,
+          # using package.json's version as the tag, and fails with a 403
+          # because this job's token is read-only. The npm scripts also pass
+          # --publish never as a second line of defence.
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-installers
+          retention-days: 30
+          # Only the distributables, not the unpacked build trees.
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach installers to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
