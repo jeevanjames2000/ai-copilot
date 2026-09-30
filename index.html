@@ -271,6 +271,11 @@
                 Launch Pilot
             </button>
 
+            <!-- Diagnostic: this text is set by JavaScript. If it still reads
+                 "Loading…" the renderer script never ran; if it reads "Ready"
+                 the script is fine and the problem is mouse input. -->
+            <div id="bootStatus" style="margin-top:14px;font-size:11px;color:#94a3b8;">Loading…</div>
+
             <div style="margin-top: 20px;">
                 <button onclick="toggleSettings()" style="
                     background: transparent; border: none; 
@@ -456,26 +461,64 @@
     </script>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        // `var`, not `let`: a failure here used to leave the next script block
+        // reading these names in the temporal dead zone, which killed it too —
+        // one missing module took down the whole UI. Every load is now
+        // individually guarded and recorded.
+        var ipcRenderer = null, showdown = null, hljs = null;
+        window.__boot = { electron: 'pending', showdown: 'pending', hljs: 'pending' };
 
-        // A top-level `let` shadows the matching window.* global, so assigning
-        // the CDN copy here is what actually makes the fallback work.
-        let showdown, hljs;
-        try { showdown = require('showdown'); } catch (e) { console.error('showdown:', e.message); }
-        try { hljs = require('highlight.js'); } catch (e) { console.error('highlight.js:', e.message); }
-        showdown = showdown || window.showdown;
-        hljs = hljs || window.hljs;
+        try {
+            ipcRenderer = require('electron').ipcRenderer;
+            window.__boot.electron = 'ok';
+        } catch (e) {
+            window.__boot.electron = 'FAILED: ' + e.message;
+        }
+
+        try {
+            showdown = require('showdown');
+            window.__boot.showdown = showdown && showdown.Converter ? 'ok' : 'loaded but no .Converter';
+        } catch (e) {
+            showdown = window.showdown || null;
+            window.__boot.showdown = showdown ? 'ok (global)' : 'FAILED: ' + e.message;
+        }
+
+        try {
+            hljs = require('highlight.js');
+            window.__boot.hljs = 'ok';
+        } catch (e) {
+            hljs = window.hljs || null;
+            window.__boot.hljs = hljs ? 'ok (global)' : 'FAILED: ' + e.message;
+        }
+
+        // If the Electron bridge is unavailable the app can't reach the AI, but
+        // it should still render and say so rather than throwing on every click.
+        if (!ipcRenderer) {
+            ipcRenderer = {
+                invoke: async () => ({ type: 'error', response: 'Electron bridge unavailable — see the status line on the launch screen.' }),
+                send: () => {},
+                on: () => {},
+            };
+        }
 
         // OVERRIDE ALERT FOR SILENCE
         window.alert = (msg) => { console.log("Suppressed Alert:", msg); };
     </script>
 
     <script>
-        // Plain-text rendering beats a dead UI if neither copy resolved.
-        const converter = showdown
-            ? new showdown.Converter({ simpleLineBreaks: true, openLinksInNewWindow: true })
-            : { makeHtml: (t) => '<pre>' + String(t).replace(/[&<>]/g,
-                  (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</pre>' };
+        // Plain-text rendering beats a dead UI if markdown isn't available.
+        var converter = null;
+        try {
+            if (showdown && showdown.Converter) {
+                converter = new showdown.Converter({ simpleLineBreaks: true, openLinksInNewWindow: true });
+            }
+        } catch (e) {
+            window.__boot.showdown = 'Converter threw: ' + e.message;
+        }
+        if (!converter) {
+            converter = { makeHtml: (t) => '<pre>' + String(t).replace(/[&<>]/g,
+                (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</pre>' };
+        }
 
         const ui = {
             input: document.getElementById('promptInput'),
@@ -500,6 +543,27 @@
         let liveStream;
         let liveModeActive = false;
         let isPilotActive = false; // New Launcher State
+
+        // Proof the renderer script reached this point, plus a keyboard route
+        // in that does not depend on mouse hit-testing working.
+        (function () {
+            const s = document.getElementById('bootStatus');
+            const b = window.__boot || {};
+            const bad = Object.keys(b).filter((k) => String(b[k]).indexOf('ok') !== 0);
+            if (s) {
+                s.textContent = bad.length
+                    ? 'Ready, but: ' + bad.map((k) => k + ' → ' + b[k]).join(' | ')
+                    : 'Ready — click Launch, or press Enter';
+                if (bad.length) s.style.color = '#fca5a5';
+            }
+            if (ipcRenderer) ipcRenderer.send('log-error', 'boot: ' + JSON.stringify(b));
+            document.addEventListener('keydown', (e) => {
+                if (!isPilotActive && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    window.launchPilot();
+                }
+            });
+        })();
 
         window.launchPilot = () => {
             const launcher = document.getElementById('launchScreen');
